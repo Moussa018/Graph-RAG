@@ -1,0 +1,32 @@
+# --- Python ---
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Environnement / Secrets ---
+.env
+.env.local
+config/local_settings.py
+
+# --- Docker & Données Locales ---
+# On ignore les dossiers de données créés par Neo4j pour ne pas saturer Git
+data/
+plugins/
+.docker/
+
+# --- IDEs & Outils ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# --- Logs ---
+*.log
+logs/

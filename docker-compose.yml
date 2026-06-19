@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.21.0-community
+    container_name: graph-rag-neo4j
+    ports:
+      - "7474:7474" # Interface Web HTTP
+      - "7687:7687" # Protocole Bolt pour le driver Python
+    volumes:
+      - ./data:/data
+      - ./plugins:/plugins
+    environment:
+      - NEO4J_AUTH=neo4j/password123
+      - NEO4J_PLUGINS=["apoc"] # Extension utile pour les graphes complexes
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
