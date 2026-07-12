@@ -1,21 +1,21 @@
-# 🚀 Ultimate Graph RAG (Code Explorer)
+#  Graph RAG (Code Explorer)
 
 This project is an advanced **Graph RAG (Retrieval-Augmented Generation)** application designed to explore and understand software architecture. 
 Unlike traditional text-based RAGs, this tool reads raw Python source code, extracts its Abstract Syntax Tree (AST), and builds a real-time **dependency graph** (Function Calls, Class Inheritances).
 
-## 🌟 Features
+## Features
 - **Code-to-Graph Extraction**: Parses `.py` files inside ZIP archives directly in memory.
 - **Interactive Visualization**: Renders an interactive, physics-based 3D graph of the codebase architecture using `PyVis`.
 - **Intelligent Architectural Assistant**: Uses Google's **Gemini 3.5 Flash** to answer complex reverse-engineering questions based purely on the graph topology and docstrings.
 - **Zero-Disk Usage**: The ZIP code is unzipped and parsed on the fly in RAM.
 
-## 🛠️ Tech Stack
+## Tech Stack
 - **Frontend**: Streamlit, PyVis
 - **Graph Engine**: NetworkX
 - **AI / LLM**: Google GenAI SDK (Gemini 3.5 Flash)
 - **Parser**: Python `ast` module
 
-## 🚀 How to Run Locally
+## How to Run Locally
 
 1. **Clone the repo**
    ```bash
