@@ -1,4 +1,5 @@
-networkx
 streamlit
-google-generativeai
+networkx
+google-genai
 python-dotenv
+pyvis
