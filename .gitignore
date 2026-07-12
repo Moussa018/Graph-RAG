@@ -1,0 +1,20 @@
+# Fichiers de configuration contenant des clés API (CRITIQUE)
+.env
+.env.*
+
+# Environnements virtuels
+venv/
+env/
+.venv/
+
+# Fichiers générés par l'application
+graph_vis.html
+*.graphml
+
+# Caches Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Streamlit
+.streamlit/

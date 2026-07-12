@@ -1,0 +1,4 @@
+networkx
+streamlit
+google-generativeai
+python-dotenv
