@@ -1,4 +1,4 @@
-# Ultimate Graph RAG (Code Explorer)
+#  Graph RAG (Code Explorer)
 
 Welcome to **Graph RAG**, an advanced Retrieval-Augmented Generation (RAG) application designed to explore, visualize, and understand the software architecture of your Python projects.
 
