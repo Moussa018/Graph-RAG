@@ -5,6 +5,7 @@ from google import genai
 import os
 import zipfile
 import ast
+import math
 from pyvis.network import Network
 from dotenv import load_dotenv
 
@@ -82,6 +83,61 @@ def process_zip_to_graph(zip_bytes):
                     pass
     return combined_graph
 
+@st.cache_data
+def build_node_embeddings(_client, _graph):
+    nodes = list(_graph.nodes(data=True))
+    if not nodes:
+        return {}
+    
+    node_names = [n[0] for n in nodes]
+    texts_to_embed = []
+    for node, data in nodes:
+        doc = data.get("doc", "")
+        node_type = data.get("type", "")
+        texts_to_embed.append(f"Nom: {node}\nType: {node_type}\nDescription: {doc}")
+    
+    embeddings = {}
+    try:
+        batch_size = 100
+        for i in range(0, len(texts_to_embed), batch_size):
+            batch_texts = texts_to_embed[i:i+batch_size]
+            response = _client.models.embed_content(
+                model='text-embedding-004',
+                contents=batch_texts
+            )
+            for j, emb in enumerate(response.embeddings):
+                embeddings[node_names[i+j]] = emb.values
+    except Exception as e:
+        st.warning(f"Erreur embeddings: {e}")
+    return embeddings
+
+def cosine_similarity(v1, v2):
+    dot_product = sum(a * b for a, b in zip(v1, v2))
+    norm_v1 = math.sqrt(sum(a * a for a in v1))
+    norm_v2 = math.sqrt(sum(b * b for b in v2))
+    if norm_v1 == 0 or norm_v2 == 0: return 0.0
+    return dot_product / (norm_v1 * norm_v2)
+
+def retrieve_subgraph(graph, query_embedding, node_embeddings, top_k=5):
+    if not node_embeddings:
+        return graph
+    
+    similarities = []
+    for node, emb in node_embeddings.items():
+        sim = cosine_similarity(query_embedding, emb)
+        similarities.append((sim, node))
+    
+    similarities.sort(reverse=True, key=lambda x: x[0])
+    top_nodes = [node for sim, node in similarities[:top_k]]
+    
+    subgraph_nodes = set(top_nodes)
+    for node in top_nodes:
+        if graph.has_node(node):
+            subgraph_nodes.update(graph.successors(node))
+            subgraph_nodes.update(graph.predecessors(node))
+            
+    return graph.subgraph(subgraph_nodes)
+
 def generate_interactive_graph(g):
     net = Network(height="500px", width="100%", bgcolor="#0E1117", font_color="white", directed=True)
     for node, data in g.nodes(data=True):
@@ -125,23 +181,43 @@ if graph and graph.number_of_nodes() > 0:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 
-        # Préparation du contexte du graphe
-        graph_context = ""
-        for u, v, data in graph.edges(data=True):
-            graph_context += f"- '{u}' {data.get('relation', 'appels')} '{v}'\n"
-            
         if prompt := st.chat_input("Posez votre question à l'architecte..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
                 
             with st.chat_message("assistant"):
-                with st.spinner("Analyse du graphe..."):
+                with st.spinner("Recherche RAG dans le graphe..."):
+                    # Récupération ou calcul des embeddings
+                    node_embeddings = build_node_embeddings(client, graph)
+                    
+                    try:
+                        # Embedding de la question
+                        query_response = client.models.embed_content(
+                            model='text-embedding-004',
+                            contents=prompt
+                        )
+                        query_embedding = query_response.embeddings[0].values
+                        subgraph = retrieve_subgraph(graph, query_embedding, node_embeddings)
+                    except Exception as e:
+                        st.error(f"Erreur d'embedding: {e}")
+                        subgraph = graph # Fallback sur le graphe complet
+                        
+                    # Préparation du contexte du sous-graphe pertinent
+                    graph_context = "### Noeuds pertinents (avec descriptions):\n"
+                    for n, data in subgraph.nodes(data=True):
+                        graph_context += f"- [{data.get('type', 'Node')}] {n} : {data.get('doc', 'Aucune doc')}\n"
+                    
+                    graph_context += "\n### Relations dans ce contexte:\n"
+                    for u, v, data in subgraph.edges(data=True):
+                        graph_context += f"- '{u}' {data.get('relation', 'appels')} '{v}'\n"
+                        
                     history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-3:]])
                     
                     full_prompt = f"""
-                    Tu es un architecte logiciel IA. Tu vas répondre au développeur en t'appuyant sur l'architecture ci-dessous.
-                    Graphe des relations :
+                    Tu es un architecte logiciel IA expert. Réponds au développeur en t'appuyant sur l'extrait de l'architecture ci-dessous (sous-graphe RAG).
+                    
+                    Contexte RAG :
                     {graph_context}
                     
                     Historique du chat :
