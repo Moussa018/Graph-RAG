@@ -10,6 +10,7 @@ env/
 # Fichiers générés par l'application
 graph_vis.html
 *.graphml
+.chroma/
 
 # Caches Python
 __pycache__/

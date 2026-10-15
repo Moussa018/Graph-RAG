@@ -3,3 +3,4 @@ networkx
 google-genai
 python-dotenv
 pyvis
+chromadb

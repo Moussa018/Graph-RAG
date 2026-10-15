@@ -6,7 +6,8 @@ import os
 from dotenv import load_dotenv
 
 from utils.parser import process_files_to_graph
-from utils.rag import build_node_embeddings, retrieve_subgraph
+from utils.rag import retrieve_subgraph
+from utils.vector_store import get_or_build_collection
 from utils.visualizer import generate_interactive_graph
 
 # ----- INTERFACE PRINCIPALE -----
@@ -65,8 +66,8 @@ if graph and graph.number_of_nodes() > 0:
                 
             with st.chat_message("assistant"):
                 with st.spinner("Recherche RAG dans le graphe..."):
-                    # Récupération ou calcul des embeddings
-                    node_embeddings = build_node_embeddings(client, graph)
+                    # Récupération (ou indexation) des embeddings dans la base vectorielle
+                    collection = get_or_build_collection(client, graph)
                     
                     try:
                         # Embedding de la question
@@ -75,7 +76,7 @@ if graph and graph.number_of_nodes() > 0:
                             contents=prompt
                         )
                         query_embedding = query_response.embeddings[0].values
-                        subgraph = retrieve_subgraph(graph, query_embedding, node_embeddings)
+                        subgraph = retrieve_subgraph(graph, query_embedding, collection)
                     except Exception as e:
                         st.error(f"Erreur d'embedding: {e}")
                         subgraph = graph # Fallback sur le graphe complet
