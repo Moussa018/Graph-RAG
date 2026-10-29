@@ -1,6 +1,7 @@
 # Fichiers de configuration contenant des clés API (CRITIQUE)
 .env
 .env.*
+!.env.example
 
 # Environnements virtuels
 venv/
@@ -9,8 +10,8 @@ env/
 
 # Fichiers générés par l'application
 graph_vis.html
+lib/
 *.graphml
-.chroma/
 
 # Caches Python
 __pycache__/
@@ -19,3 +20,6 @@ __pycache__/
 
 # Streamlit
 .streamlit/
+
+# Tests
+.pytest_cache/

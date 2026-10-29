@@ -2,5 +2,10 @@ streamlit
 networkx
 google-genai
 python-dotenv
-pyvis
-chromadb
+pyvis>=0.3.2
+numpy
+psycopg[binary]>=3.1
+pgvector>=0.3
+neo4j>=5.14
+rank-bm25
+sentence-transformers

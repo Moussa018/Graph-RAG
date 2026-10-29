@@ -1,0 +1,9 @@
+[project]
+name = "graph-rag"
+version = "0.2.0"
+description = "Graph RAG over Python code: AST graph in Neo4j/Postgres, pgvector + BM25 hybrid search, cross-encoder reranking"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

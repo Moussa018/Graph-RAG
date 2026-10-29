@@ -1,17 +1,35 @@
-import streamlit as st
-import streamlit.components.v1 as components
-import networkx as nx
-from google import genai
+"""Interface Streamlit : upload, indexation, carte du graphe, chat et trace de recherche."""
 import os
+
 from dotenv import load_dotenv
 
-from utils.parser import process_files_to_graph
-from utils.rag import retrieve_subgraph
-from utils.vector_store import get_or_build_collection
-from utils.visualizer import generate_interactive_graph
+load_dotenv()
+
+import networkx as nx
+import streamlit as st
+import streamlit.components.v1 as components
+
+from graph_rag.config import Settings
+from graph_rag.generation.prompt import build_graph_context, build_prompt
+from graph_rag.ingestion.indexer import index_project
+from graph_rag.ingestion.parser import build_graph, iter_python_sources
+from graph_rag.services import build_services
+from graph_rag.ui.visualizer import generate_interactive_graph
+
+HISTORY_MESSAGES = 3  # messages precedents envoyes au LLM
+
+
+@st.cache_resource
+def get_services():
+    return build_services(Settings.from_env())
+
+
+@st.cache_data
+def load_graph(uploaded_files):
+    return build_graph(iter_python_sources(uploaded_files))
+
 
 # ----- INTERFACE PRINCIPALE -----
-load_dotenv()
 st.set_page_config(page_title="Ultimate Graph RAG", layout="wide", page_icon="🌌")
 st.title("Graph RAG (Code Explorer)")
 
@@ -19,7 +37,11 @@ if not os.environ.get("GOOGLE_API_KEY") or os.environ.get("GOOGLE_API_KEY") == "
     st.error("Clé API Google manquante dans le fichier .env")
     st.stop()
 
-client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+try:
+    services = get_services()
+except Exception as e:
+    st.error(f"Configuration invalide : {e}")
+    st.stop()
 
 # Gestion de la mémoire du Chatbot
 if "messages" not in st.session_state:
@@ -28,90 +50,77 @@ if "messages" not in st.session_state:
 # Sidebar pour l'upload
 st.sidebar.markdown("### 1. Uploadez vos fichiers")
 uploaded_files = st.sidebar.file_uploader(
-    "Fichiers .py ou archive .zip", 
-    type=["zip", "py"], 
+    "Fichiers .py ou archive .zip",
+    type=["zip", "py"],
     accept_multiple_files=True
 )
 
 graph = None
 if uploaded_files:
     with st.spinner("Extraction du code à la volée..."):
-        graph = process_files_to_graph(uploaded_files)
+        graph = load_graph(uploaded_files)
 elif os.path.exists("code_graph.graphml"):
     graph = nx.read_graphml("code_graph.graphml")
 
-if graph and graph.number_of_nodes() > 0:
-    st.sidebar.success(f"Graphe en mémoire : {graph.number_of_nodes()} Noeuds et {graph.number_of_edges()} Relations")
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.markdown("### Carte Interactive de l'Architecture")
-        st.caption("Vous pouvez zoomer, déplacer les noeuds, et les survoler pour lire le code.")
-        html_data = generate_interactive_graph(graph)
-        components.html(html_data, height=520)
-    
-    with col2:
-        st.markdown("### Assistant")
-        
-        # Affichage du chat
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-                
-        if prompt := st.chat_input("Posez votre question à l'architecte..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-                
-            with st.chat_message("assistant"):
-                with st.spinner("Recherche RAG dans le graphe..."):
-                    # Récupération (ou indexation) des embeddings dans la base vectorielle
-                    collection = get_or_build_collection(client, graph)
-                    
-                    try:
-                        # Embedding de la question
-                        query_response = client.models.embed_content(
-                            model='text-embedding-004',
-                            contents=prompt
-                        )
-                        query_embedding = query_response.embeddings[0].values
-                        subgraph = retrieve_subgraph(graph, query_embedding, collection)
-                    except Exception as e:
-                        st.error(f"Erreur d'embedding: {e}")
-                        subgraph = graph # Fallback sur le graphe complet
-                        
-                    # Préparation du contexte du sous-graphe pertinent
-                    graph_context = "### Noeuds pertinents (avec descriptions):\n"
-                    for n, data in subgraph.nodes(data=True):
-                        graph_context += f"- [{data.get('type', 'Node')}] {n} : {data.get('doc', 'Aucune doc')}\n"
-                    
-                    graph_context += "\n### Relations dans ce contexte:\n"
-                    for u, v, data in subgraph.edges(data=True):
-                        graph_context += f"- '{u}' {data.get('relation', 'appels')} '{v}'\n"
-                        
-                    history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-3:]])
-                    
-                    full_prompt = f"""
-                    Tu es un architecte logiciel IA expert. Réponds au développeur en t'appuyant sur l'extrait de l'architecture ci-dessous (sous-graphe RAG).
-                    
-                    Contexte RAG :
-                    {graph_context}
-                    
-                    Historique du chat :
-                    {history_text}
-                    
-                    Réponds à la question de façon concise et experte.
-                    """
-                    try:
-                        response = client.models.generate_content(
-                            model='gemini-3.5-flash',
-                            contents=full_prompt
-                        )
-                        st.markdown(response.text)
-                        st.session_state.messages.append({"role": "assistant", "content": response.text})
-                    except Exception as e:
-                        st.error(f"Erreur API : {e}")
-
-else:
+if not graph or graph.number_of_nodes() == 0:
     st.info("Veuillez générer un graphe local ou uploader un ZIP dans le panneau latéral gauche.")
+    st.stop()
+
+st.sidebar.success(f"Graphe en mémoire : {graph.number_of_nodes()} Noeuds et {graph.number_of_edges()} Relations")
+
+# Indexation : vecteurs dans pgvector, graphe dans Neo4j (ou Postgres) ; chaque store est ignore s'il a deja le projet
+project_id = None
+try:
+    with st.spinner(f"Indexation (pgvector + {services.graph_store.name})..."):
+        report = index_project(graph, services.embedder, services.vector_store, services.graph_store)
+    project_id = report.project_id
+    st.sidebar.caption(f"Projet `{project_id}` — vecteurs : pgvector, graphe : {services.graph_store.name}")
+except Exception as e:
+    st.sidebar.error(f"Indexation impossible : {e}")
+
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.markdown("### Carte Interactive de l'Architecture")
+    st.caption("Vous pouvez zoomer, déplacer les noeuds, et les survoler pour lire le code.")
+    components.html(generate_interactive_graph(graph), height=520)
+
+with col2:
+    st.markdown("### Assistant")
+
+    # Affichage du chat
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if prompt := st.chat_input("Posez votre question à l'architecte..."):
+        history = st.session_state.messages[-HISTORY_MESSAGES:]
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            result = None
+            with st.spinner("Recherche hybride (pgvector + BM25), reranking et expansion du graphe..."):
+                try:
+                    if project_id is None:
+                        raise RuntimeError("projet non indexé")
+                    result = services.retriever.retrieve(project_id, prompt)
+                    subgraph = result.subgraph
+                    for warning in result.warnings:
+                        st.warning(warning)
+                except Exception as e:
+                    st.error(f"Erreur de recherche : {e}")
+                    subgraph = graph  # Fallback sur le graphe complet
+
+                full_prompt = build_prompt(prompt, build_graph_context(subgraph), history)
+                try:
+                    answer = services.generate_answer(full_prompt)
+                    st.markdown(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                except Exception as e:
+                    st.error(f"Erreur API : {e}")
+
+            if result and result.trace:
+                with st.expander(f"Détail de la recherche ({subgraph.number_of_nodes()} noeuds dans le contexte)"):
+                    st.dataframe(result.trace, hide_index=True, use_container_width=True)
