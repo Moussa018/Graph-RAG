@@ -5,7 +5,7 @@ from graph_rag.retrieval.pipeline import HybridRetriever
 
 SETTINGS = Settings(
     google_api_key=None, llm_model="", embed_model="", embed_dim=1,
-    database_url="", graph_backend="postgres",
+    database_url="",
     neo4j_uri="", neo4j_user="", neo4j_password="", neo4j_database="",
     reranker_model="", dense_k=3, bm25_k=3, rrf_k=60, rerank_candidates=3, top_k=1, graph_depth=1,
 )

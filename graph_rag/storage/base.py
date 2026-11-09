@@ -18,7 +18,7 @@ class VectorStore(Protocol):
 
 
 class GraphStore(Protocol):
-    """Graphe d'un projet (implementations : Neo4jGraphStore, PostgresGraphStore)."""
+    """Graphe d'un projet (implementation : Neo4jGraphStore)."""
 
     name: str
 

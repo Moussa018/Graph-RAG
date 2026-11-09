@@ -17,7 +17,6 @@ class Settings:
 
     # Stockage
     database_url: str
-    graph_backend: str  # "neo4j" ou "postgres"
     neo4j_uri: str
     neo4j_user: str
     neo4j_password: str
@@ -34,16 +33,12 @@ class Settings:
 
     @classmethod
     def from_env(cls):
-        graph_backend = os.environ.get("GRAPH_BACKEND", "neo4j").lower()
-        if graph_backend not in ("neo4j", "postgres"):
-            raise ValueError(f"GRAPH_BACKEND doit valoir 'neo4j' ou 'postgres', pas {graph_backend!r}")
         return cls(
             google_api_key=os.environ.get("GOOGLE_API_KEY"),
             llm_model=os.environ.get("LLM_MODEL", "gemini-3.5-flash"),
             embed_model=os.environ.get("EMBED_MODEL", "text-embedding-004"),
             embed_dim=_env_int("EMBED_DIM", 768),
             database_url=os.environ.get("DATABASE_URL", "postgresql://graphrag:graphrag@localhost:5432/graphrag"),
-            graph_backend=graph_backend,
             neo4j_uri=os.environ.get("NEO4J_URI", "bolt://localhost:7687"),
             neo4j_user=os.environ.get("NEO4J_USER", "neo4j"),
             neo4j_password=os.environ.get("NEO4J_PASSWORD", "graphrag-password"),

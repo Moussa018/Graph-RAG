@@ -14,8 +14,8 @@ Upload a Python project and chat with an AI that understands its architecture. T
 - **Vectors in pgvector**: 768-dimension Gemini embeddings with an HNSW index (`vector_cosine_ops`).
 - **Hybrid retrieval**: dense search (pgvector) and lexical search (BM25 Okapi, with code-aware tokenisation) are merged with RRF.
 - **Reranker**: a multilingual cross-encoder (`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`) keeps the 5 most relevant nodes.
-- **Swappable graph backend**: `GRAPH_BACKEND=neo4j` (default) or `postgres` (recursive SQL query, no Neo4j needed).
-- **Incremental indexing**: each project is identified by a fingerprint of its nodes and edges. Each store is only written if it doesn't already have the project, so switching graph backend doesn't redo the embeddings.
+- **Graph in Neo4j**: nodes and relations (calls, methods, inheritance) are stored and walked in Neo4j.
+- **Incremental indexing**: each project is identified by a fingerprint of its nodes and edges. Each store is only written if it doesn't already have the project.
 - **Retrieval trace**: under each answer, a table shows every candidate's pgvector rank, BM25 rank, RRF score and reranker score.
 
 ## Architecture
@@ -75,9 +75,8 @@ MATCH (f:Function {node_id: 'build_graph'})-[:CALLS*1..2]->(g) RETURN f, g
 |---|---|
 | `code_projects` | Projects whose vectors are indexed |
 | `code_nodes` | `node_id`, `node_type`, `file`, `doc`, `source`, `content` (indexed text), `embedding vector(768)` + HNSW index |
-| `code_graph_projects`, `code_edges` | Graph, used only when `GRAPH_BACKEND=postgres` |
 
-Each write (vectors, Neo4j graph, Postgres graph) is a single transaction, and the project marker is written in that same transaction. A store that lists a project therefore always holds it in full. Tables and constraints are created automatically.
+Each write (vectors, Neo4j graph) is a single transaction, and the project marker is written in that same transaction. A store that lists a project therefore always holds it in full. Tables and constraints are created automatically.
 
 ## Run locally
 
@@ -96,8 +95,6 @@ streamlit run app.py
 
 The reranker (~470 MB) is downloaded from Hugging Face on the first question, then cached.
 
-To run without Neo4j, set `GRAPH_BACKEND=postgres` and start only `docker compose up -d postgres`.
-
 To re-index from scratch, run `docker compose down -v`.
 
 ## Configuration
@@ -107,7 +104,6 @@ All variables are listed in [`.env.example`](.env.example) and read by `graph_ra
 | Variable | Default | Role |
 |---|---|---|
 | `GOOGLE_API_KEY` | — | Gemini key (required) |
-| `GRAPH_BACKEND` | `neo4j` | `neo4j` or `postgres` |
 | `DATABASE_URL` | `postgresql://graphrag:graphrag@localhost:5432/graphrag` | pgvector |
 | `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | `bolt://localhost:7687` / `neo4j` / `graphrag-password` | Neo4j |
 | `RERANKER_MODEL` | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Cross-encoder |
@@ -140,7 +136,7 @@ graph_rag/
     indexer.py                  Fingerprint, indexed text, idempotent indexing into both stores
   storage/
     base.py                     VectorStore / GraphStore interfaces
-    postgres.py                 PgVectorStore (pgvector) + PostgresGraphStore (recursive SQL)
+    postgres.py                 PgVectorStore (pgvector)
     neo4j_graph.py              Neo4jGraphStore (Cypher)
   retrieval/
     embeddings.py               Gemini embeddings (RETRIEVAL_DOCUMENT / RETRIEVAL_QUERY)

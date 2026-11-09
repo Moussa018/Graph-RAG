@@ -7,7 +7,7 @@ from graph_rag.retrieval.embeddings import GeminiEmbedder
 from graph_rag.retrieval.pipeline import HybridRetriever
 from graph_rag.retrieval.reranker import CrossEncoderReranker
 from graph_rag.storage.base import GraphStore
-from graph_rag.storage.postgres import PgVectorStore, PostgresGraphStore
+from graph_rag.storage.postgres import PgVectorStore
 
 
 @dataclass
@@ -18,7 +18,7 @@ class Services:
     client: genai.Client
     embedder: GeminiEmbedder
     vector_store: PgVectorStore
-    graph_store: GraphStore  # Neo4jGraphStore ou PostgresGraphStore
+    graph_store: GraphStore  # Neo4jGraphStore
     retriever: HybridRetriever
 
     def generate_answer(self, prompt):
@@ -27,12 +27,10 @@ class Services:
 
 
 def build_graph_store(settings):
-    if settings.graph_backend == "neo4j":
-        from graph_rag.storage.neo4j_graph import Neo4jGraphStore
+    from graph_rag.storage.neo4j_graph import Neo4jGraphStore
 
-        return Neo4jGraphStore(settings.neo4j_uri, settings.neo4j_user, settings.neo4j_password,
-                               settings.neo4j_database)
-    return PostgresGraphStore(settings.database_url, settings.embed_dim)
+    return Neo4jGraphStore(settings.neo4j_uri, settings.neo4j_user, settings.neo4j_password,
+                           settings.neo4j_database)
 
 
 def build_services(settings):
